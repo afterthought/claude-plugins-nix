@@ -145,9 +145,14 @@ in
       # Install declared plugins
       home.activation.installClaudePlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         ${lib.optionalString (cfg.claude-plugins.plugins != [ ]) ''
-          $DRY_RUN_CMD ${cfg.claude-plugins.package}/bin/claude-plugins list > /dev/null 2>&1 || true
-          ${lib.concatMapStringsSep "\n" (plugin: ''
-            if ! ${cfg.claude-plugins.package}/bin/claude-plugins list 2>/dev/null | grep -q "${plugin}"; then
+          INSTALLED_PLUGINS=$(${cfg.claude-plugins.package}/bin/claude-plugins list 2>/dev/null || true)
+          ${lib.concatMapStringsSep "\n" (plugin:
+            let
+              # Extract the short plugin name (last segment of @owner/marketplace/plugin-name)
+              pluginName = lib.last (lib.splitString "/" plugin);
+            in
+            ''
+            if ! echo "$INSTALLED_PLUGINS" | grep -q "${pluginName}"; then
               $VERBOSE_ECHO "Installing plugin: ${plugin}"
               $DRY_RUN_CMD ${cfg.claude-plugins.package}/bin/claude-plugins install "${plugin}" || true
             fi
@@ -175,14 +180,19 @@ in
             # Generate installation commands for simple mode
             simpleCommands = lib.optionalString useSimpleMode ''
               ${lib.concatMapStringsSep "\n" (client: ''
-                ${lib.concatMapStringsSep "\n" (skill: ''
-                  if ! ${cfg.skills-installer.package}/bin/skills-installer list --client ${client} 2>/dev/null | grep -q "${skill}"; then
+                INSTALLED_SKILLS_${client}=$(${cfg.skills-installer.package}/bin/skills-installer list --client ${client} 2>/dev/null || true)
+                ${lib.concatMapStringsSep "\n" (skill:
+                  let skillName = lib.last (lib.splitString "/" skill); in
+                  ''
+                  if ! echo "$INSTALLED_SKILLS_${client}" | grep -q "${skillName}"; then
                     $VERBOSE_ECHO "Installing global skill for ${client}: ${skill}"
                     $DRY_RUN_CMD ${cfg.skills-installer.package}/bin/skills-installer install --client ${client} "${skill}" || true
                   fi
                 '') cfg.skills-installer.globalSkills}
-                ${lib.concatMapStringsSep "\n" (skill: ''
-                  if ! ${cfg.skills-installer.package}/bin/skills-installer list --client ${client} 2>/dev/null | grep -q "${skill}"; then
+                ${lib.concatMapStringsSep "\n" (skill:
+                  let skillName = lib.last (lib.splitString "/" skill); in
+                  ''
+                  if ! echo "$INSTALLED_SKILLS_${client}" | grep -q "${skillName}"; then
                     $VERBOSE_ECHO "Installing local skill for ${client}: ${skill}"
                     $DRY_RUN_CMD ${cfg.skills-installer.package}/bin/skills-installer install --client ${client} --local "${skill}" || true
                   fi
@@ -194,14 +204,19 @@ in
             advancedCommands = lib.optionalString (!useSimpleMode) ''
               ${lib.concatStringsSep "\n" (
                 lib.mapAttrsToList (client: skills: ''
-                  ${lib.concatMapStringsSep "\n" (skill: ''
-                    if ! ${cfg.skills-installer.package}/bin/skills-installer list --client ${client} 2>/dev/null | grep -q "${skill}"; then
+                  INSTALLED_SKILLS_${client}=$(${cfg.skills-installer.package}/bin/skills-installer list --client ${client} 2>/dev/null || true)
+                  ${lib.concatMapStringsSep "\n" (skill:
+                    let skillName = lib.last (lib.splitString "/" skill); in
+                    ''
+                    if ! echo "$INSTALLED_SKILLS_${client}" | grep -q "${skillName}"; then
                       $VERBOSE_ECHO "Installing global skill for ${client}: ${skill}"
                       $DRY_RUN_CMD ${cfg.skills-installer.package}/bin/skills-installer install --client ${client} "${skill}" || true
                     fi
                   '') skills.global}
-                  ${lib.concatMapStringsSep "\n" (skill: ''
-                    if ! ${cfg.skills-installer.package}/bin/skills-installer list --client ${client} 2>/dev/null | grep -q "${skill}"; then
+                  ${lib.concatMapStringsSep "\n" (skill:
+                    let skillName = lib.last (lib.splitString "/" skill); in
+                    ''
+                    if ! echo "$INSTALLED_SKILLS_${client}" | grep -q "${skillName}"; then
                       $VERBOSE_ECHO "Installing local skill for ${client}: ${skill}"
                       $DRY_RUN_CMD ${cfg.skills-installer.package}/bin/skills-installer install --client ${client} --local "${skill}" || true
                     fi
